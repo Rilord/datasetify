@@ -152,6 +152,10 @@ dmypy.json
 /images
 /models
 
+# YOLO dataset cache
+*.cache
+
+
 #models
 *.onnx
 
