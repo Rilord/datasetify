@@ -32,7 +32,7 @@ def extract_basename(filename):
 
 
 def make_dirs(dir="new_dir/"):
-    # Create folders
+    '''Create folders'''
     dir = Path(dir)
     if dir.exists():
         shutil.rmtree(dir)  # delete dir
@@ -42,7 +42,7 @@ def make_dirs(dir="new_dir/"):
 
 
 def image_folder2file(folder="images/"):  # from utils import *; image_folder2file()
-    # write a txt file listing all imaged in folder
+    '''write a txt file listing all imaged in folder'''
     s = glob.glob(f"{folder}*.*")
     with open(f"{folder[:-1]}.txt", "w") as file:
         for l in s:
@@ -74,8 +74,6 @@ def is_dir_writeable(dir_path) -> bool:
 
 def check_file(file, hard=True):
     file = str(file).strip()
-
-    print(file)
 
     if not file or ('://' not in file and Path(file).exists()):  # exists ('://' check required in Windows Python<3.10)
         return file

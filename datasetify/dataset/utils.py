@@ -64,7 +64,6 @@ def verify_image(args):
 
 def verify_image_label(args):
     """Verify one image-label pair."""
-    print(args)
     im_file, lb_file, prefix, num_cls = args
     # Number (missing, found, empty, corrupt), message, segments, keypoints
     nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, "", []

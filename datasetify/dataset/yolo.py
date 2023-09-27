@@ -26,7 +26,6 @@ from datasetify.utils import (
     SETTINGS_YAML,
     ROOT,
     yaml_load,
-    clean_url,
 )
 from datasetify.utils.fs import is_dir_writeable, scan_txt, check_file
 
@@ -91,8 +90,6 @@ def check_det_dataset(dataset, autodownload=True):
                 )  # replace 'validation' key with 'val' key
             else:
                 pass
-                # raise SyntaxError(
-                # emojis(f"{dataset} '{k}:' key missing .\n'train' and 'val' are required in all data YAMLs."))
     if "names" not in data and "nc" not in data:
         pass
         # raise SyntaxError(emojis(f"{dataset} key missing .\n either 'names' or 'nc' are required in all data YAMLs."))
@@ -131,7 +128,7 @@ def check_det_dataset(dataset, autodownload=True):
             Path(x).resolve() for x in (val if isinstance(val, list) else [val])
         ]  # val path
         if not all(x.exists() for x in val):
-            name = clean_url(dataset)  # dataset name with URL auth stripped
+            name = dataset  # dataset name with URL auth stripped
             m = f"\nDataset '{name}' images not found missing path '{[x for x in val if not x.exists()][0]}'"
             if s and autodownload:
                 LOGGER.warning(m)
@@ -306,7 +303,6 @@ class YoloDataset(BaseDataset):
 
         new_img_name = f"{img_id:012d}.jpg"
         save_img_path = save_img_dir / new_img_name
-        print(save_img_path)
         img_src = cv2.imread(str(img_path))
         if img_path.suffix.lower() == ".jpg":
             shutil.copyfile(img_path, save_img_path)

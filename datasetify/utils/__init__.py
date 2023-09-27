@@ -1,7 +1,6 @@
 import os
 import logging.config
 from pathlib import Path
-import urllib
 import numpy as np
 from argparse import Namespace
 
@@ -53,7 +52,8 @@ NUM_THREADS = min(
     8, max(1, os.cpu_count() - 1)
 )  # number of YOLOv5 multiprocessing threads
 LOGGING_NAME = "datasetify"
-DATASETS_DIR = Path("./")
+
+DATASETS_DIR = Path().parent.resolve()
 
 DEFAULT_CFG_DICT = yaml_load(DEFAULT_CFG_PATH)
 for k, v in DEFAULT_CFG_DICT.items():
@@ -178,15 +178,3 @@ def segment2box(segment, width=640, height=640):
         if any(x)
         else np.zeros(4, dtype=segment.dtype)
     )  # xyxy
-
-
-
-
-def clean_url(url):
-    """Strip auth from URL, i.e. https://url.com/file.txt?auth -> https://url.com/file.txt."""
-    url = (
-        Path(url).as_posix().replace(":/", "://")
-    )  # Pathlib turns :// -> :/, as_posix() for Windows
-    return urllib.parse.unquote(url).split("?")[
-        0
-    ]  # '%2F' to '/', split https://url.com/file.txt?auth
