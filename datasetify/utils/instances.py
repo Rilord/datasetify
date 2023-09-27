@@ -38,8 +38,8 @@ class Bboxes:
         if self.format == format:
             return
         elif self.format == 'xyxy':
-            func = xyxy2yolo if format == 'xywh' else xyxy2coco
-        elif self.format == 'xywh':
+            func = xyxy2yolo if format == 'yolo' else xyxy2coco
+        elif self.format == 'yolo':
             func = yolo2xyxy if format == 'xyxy' else yolo2coco
         else:
             func = coco2xyxy if format == 'xyxy' else coco2yolo

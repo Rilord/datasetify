@@ -2,7 +2,6 @@ import os
 import time
 import shutil
 import json
-import datetime
 
 import cv2
 import numpy as np
@@ -12,7 +11,7 @@ from itertools import repeat
 from pathlib import Path
 from multiprocessing.pool import ThreadPool
 
-from datasetify.utils.bboxes import yolo2coco
+from datasetify.utils.bboxes import yolo2xyxy
 from .base import BaseDataset
 
 from datasetify import __version__
@@ -29,7 +28,7 @@ from datasetify.utils import (
 )
 from datasetify.utils.fs import is_dir_writeable, scan_txt, check_file
 
-from .augmentation import Compose, Format, Instances, v8_transforms
+from .augmentation import Compose, Format, v8_transforms
 from .utils import verify_image_label, image2label_paths
 
 
@@ -371,9 +370,9 @@ class YoloDataset(BaseDataset):
 
     def _get_coco_annotation(self, label_path: Path, img_id, height, width):
         def get_box_info(vertex_info, height, width):
-            cx, cy, w, h = [float(i) for i in vertex_info]
+            x, y, w, h = [float(i) for i in vertex_info]
 
-            xyxy = yolo2coco(np.array([cx, cy, w, h]))
+            xyxy = yolo2xyxy(np.array([x, y, w, h]))
             x0, y0, x1, y1 = xyxy.ravel()
 
             box_w = w * width
