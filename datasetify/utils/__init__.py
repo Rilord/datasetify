@@ -1,16 +1,20 @@
 import os
 import logging.config
 from pathlib import Path
+from types import SimpleNamespace
 import numpy as np
-from argparse import Namespace
 
 from tqdm import tqdm as tqdm_original
 
-from types import SimpleNamespace
+
+from .fs import ROOT
 
 from .yaml import yaml_load
+from .json import json_load
 
-from .fs import is_dir_writeable, ROOT, DEFAULT_CFG_PATH
+from .fs import is_dir_writeable, DEFAULT_CFG_PATH
+
+__all__ = ["json_load", "ROOT"]
 
 
 class IterableSimpleNamespace(SimpleNamespace):

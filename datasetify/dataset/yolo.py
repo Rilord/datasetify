@@ -2,6 +2,7 @@ import os
 import time
 import shutil
 import json
+from PIL import Image, ImageOps
 
 import cv2
 import numpy as np
@@ -11,7 +12,7 @@ from itertools import repeat
 from pathlib import Path
 from multiprocessing.pool import ThreadPool
 
-from datasetify.utils.bboxes import yolo2xyxy
+from datasetify.utils.bboxes import segments2boxes, yolo2xyxy
 from .base import BaseDataset
 
 from datasetify import __version__
@@ -26,10 +27,15 @@ from datasetify.utils import (
     ROOT,
     yaml_load,
 )
-from datasetify.utils.fs import is_dir_writeable, scan_txt, check_file
+from datasetify.utils.fs import scan_txt, check_file
 
-from .augmentation import Compose, Format, v8_transforms
-from .utils import verify_image_label, image2label_paths
+from .augmentation import Compose, Format, LetterBox, yolo_v8_transforms
+from .utils import (
+    exif_size,
+    load_dataset_cache_file,
+    save_dataset_cache_file,
+    image2label_paths,
+)
 
 
 def check_class_names(names):
@@ -91,10 +97,14 @@ def check_det_dataset(dataset, autodownload=True):
                 pass
     if "names" not in data and "nc" not in data:
         pass
-        # raise SyntaxError(emojis(f"{dataset} key missing .\n either 'names' or 'nc' are required in all data YAMLs."))
+        raise SyntaxError(
+            f"{dataset} key missing .\n either 'names' or 'nc' are required in all data YAMLs."
+        )
     if "names" in data and "nc" in data and len(data["names"]) != data["nc"]:
         pass
-        # raise SyntaxError(emojis(f"{dataset} 'names' length {len(data['names'])} and 'nc: {data['nc']}' must match."))
+        raise SyntaxError(
+            f"{dataset} 'names' length {len(data['names'])} and 'nc: {data['nc']}' must match."
+        )
     if "names" not in data:
         data["names"] = [f"class_{i}" for i in range(data["nc"])]
     else:
@@ -148,7 +158,6 @@ def check_det_dataset(dataset, autodownload=True):
                 else f"failure {dt}"
             )
             LOGGER.info(f"Dataset download {s}\n")
-    # check_font('Arial.ttf' if is_ascii(data['names']) else 'Arial.Unicode.ttf')  # download fonts
 
     return data  # dictionary
 
@@ -210,7 +219,7 @@ class YoloDataset(BaseDataset):
                             cls=lb[:, 0:1],  # n, 1
                             bboxes=lb[:, 1:],  # n, 4
                             normalized=True,
-                            bbox_format="xywh",
+                            bbox_format="yolo",
                         )
                     )
                 if msg:
@@ -227,23 +236,13 @@ class YoloDataset(BaseDataset):
         save_dataset_cache_file(self.prefix, path, x)
         return x
 
-    @staticmethod
-    def load_dataset_cache_file(path):
-        """Load YOLO *.cache dictionary from path."""
-        import gc
-
-        gc.disable()  # reduce pickle load time https://github.com/ultralytics/ultralytics/pull/1585
-        cache = np.load(str(path), allow_pickle=True).item()  # load dict
-        gc.enable()
-        return cache
-
     def get_labels(self):
         """Returns dictionary of labels for YOLO training."""
         self.label_files = image2label_paths(self.im_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
         try:
             cache, exists = (
-                self.load_dataset_cache_file(cache_path),
+                load_dataset_cache_file(cache_path),
                 True,
             )  # attempt to load a *.cache file
         except (FileNotFoundError, AssertionError, AttributeError):
@@ -279,14 +278,14 @@ class YoloDataset(BaseDataset):
         if self.augment:
             hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
             hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
-            transforms = v8_transforms(self, self.imgsz, hyp)
+            transforms = yolo_v8_transforms(self, self.imgsz, hyp)
         else:
             transforms = Compose(
                 [LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)]
             )
         transforms.append(
             Format(
-                bbox_format="xywh",
+                bbox_format="yolo",
                 normalize=True,
                 return_mask=False,
                 return_keypoint=False,
@@ -423,28 +422,77 @@ class YoloDataset(BaseDataset):
         return annotation
 
 
-def load_dataset_cache_file(path):
-    """Load an Ultralytics *.cache dictionary from path."""
-    import gc
+def verify_image_label(args):
+    """Verify one image-label pair."""
+    im_file, lb_file, prefix, num_cls = args
+    # Number (missing, found, empty, corrupt), message, segments, keypoints
+    nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, "", []
+    try:
+        # Verify images
+        im = Image.open(im_file)
+        im.verify()  # PIL verify
+        shape = exif_size(im)  # image size
+        shape = (shape[1], shape[0])  # hw
+        assert (shape[0] > 9) & (shape[1] > 9), f"image size {shape} <10 pixels"
+        assert im.format.lower() in IMG_FORMATS, f"invalid image format {im.format}"
+        if im.format.lower() in ("jpg", "jpeg"):
+            with open(im_file, "rb") as f:
+                f.seek(-2, 2)
+                if f.read() != b"\xff\xd9":  # corrupt JPEG
+                    ImageOps.exif_transpose(Image.open(im_file)).save(
+                        im_file, "JPEG", subsampling=0, quality=100
+                    )
+                    msg = (
+                        f"{prefix}WARNING ⚠️ {im_file}: corrupt JPEG restored and saved"
+                    )
 
-    gc.disable()  # reduce pickle load time https://github.com/ultralytics/ultralytics/pull/1585
-    cache = np.load(str(path), allow_pickle=True).item()  # load dict
-    gc.enable()
-    return cache
-
-
-def save_dataset_cache_file(prefix, path, x):
-    """Save an Ultralytics dataset *.cache dictionary x to path."""
-    if is_dir_writeable(path.parent):
-        if path.exists():
-            path.unlink()  # remove *.cache file if exists
-        np.save(str(path), x)  # save cache for next time
-        path.with_suffix(".cache.npy").rename(path)  # remove .npy suffix
-        LOGGER.info(f"{prefix}New cache created: {path}")
-    else:
-        LOGGER.warning(
-            f"{prefix}WARNING ⚠️ Cache directory {path.parent} is not writeable, cache not saved."
-        )
+        # Verify labels
+        if os.path.isfile(lb_file):
+            nf = 1  # label found
+            with open(lb_file) as f:
+                lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
+                if any(len(x) > 6 for x in lb):  # is segment
+                    classes = np.array([x[0] for x in lb], dtype=np.float32)
+                    segments = [
+                        np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in lb
+                    ]  # (cls, xy1...)
+                    lb = np.concatenate(
+                        (classes.reshape(-1, 1), segments2boxes(segments)), 1
+                    )  # (cls, xywh)
+                lb = np.array(lb, dtype=np.float32)
+            nl = len(lb)
+            if nl:
+                assert (
+                    lb.shape[1] == 5
+                ), f"labels require 5 columns, {lb.shape[1]} columns detected"
+                assert (
+                    lb[:, 1:] <= 1
+                ).all(), f"non-normalized or out of bounds coordinates {lb[:, 1:][lb[:, 1:] > 1]}"
+                assert (lb >= 0).all(), f"negative label values {lb[lb < 0]}"
+                # All labels
+                max_cls = int(lb[:, 0].max())  # max label count
+                assert max_cls <= num_cls, (
+                    f"Label class {max_cls} exceeds dataset class count {num_cls}. "
+                    f"Possible class labels are 0-{num_cls - 1}"
+                )
+                _, i = np.unique(lb, axis=0, return_index=True)
+                if len(i) < nl:  # duplicate row check
+                    lb = lb[i]  # remove duplicates
+                    if segments:
+                        segments = [segments[x] for x in i]
+                    msg = f"{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed"
+            else:
+                ne = 1  # label empty
+                lb = np.zeros((0, 5), dtype=np.float32)
+        else:
+            nm = 1  # label missing
+            lb = np.zeros((0, 5), dtype=np.float32)
+        lb = lb[:, :5]
+        return im_file, lb, shape, nm, nf, ne, nc, msg
+    except Exception as e:
+        nc = 1
+        msg = f"{prefix}WARNING {im_file}: ignoring corrupt image/label: {e}"
+        return [None, None, None, None, None, nm, nf, ne, nc, msg]
 
 
 def build_yolo_dataset(cfg, img_path, data, mode="train", rect=False, stride=32):

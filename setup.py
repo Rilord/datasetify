@@ -40,7 +40,7 @@ setup(
     name="datasetify",  # name of pypi package
     version=get_version(),  # version of pypi package
     python_requires=">=3.8",
-    license="AGPL-3.0",
+    license="Apache License 2.0",
     description=("Tools for managing datasets for image detection"),
     long_description=README,
     long_description_content_type="text/markdown",

@@ -66,6 +66,7 @@ class BaseDataset(Dataset):
     def get_img_files(self, img_path):
         """Read image files."""
         try:
+            print('images in ', img_path)
             f = []  # image files
             for p in img_path if isinstance(img_path, list) else [img_path]:
                 p = Path(p)  # os-agnostic
@@ -73,6 +74,7 @@ class BaseDataset(Dataset):
                     f += glob.glob(str(p / "**" / "*.*"), recursive=True)
                     # F = list(p.rglob('*.*'))  # pathlib
                 elif p.is_file():  # file
+                    print(p)
                     with open(p) as t:
                         t = t.read().strip().splitlines()
                         parent = str(p.parent) + os.sep
