@@ -757,7 +757,7 @@ class Format:
 
 
 def generic_transforms(dataset, imgsz, hyp, stretch=False):
-    """Convert images to a size suitable for YOLOv8 training."""
+    """Convert images to a size suitable for dataset training."""
     pre_transform = Compose([
         Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic),
         CopyPaste(p=hyp.copy_paste),

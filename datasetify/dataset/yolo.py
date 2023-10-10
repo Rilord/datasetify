@@ -34,7 +34,7 @@ from .utils import (
     exif_size,
     load_dataset_cache_file,
     save_dataset_cache_file,
-    image2label_paths,
+    yolo_image2label_paths,
 )
 
 
@@ -238,7 +238,7 @@ class YoloDataset(BaseDataset):
 
     def get_labels(self):
         """Returns dictionary of labels for YOLO training."""
-        self.label_files = image2label_paths(self.im_files)
+        self.label_files = yolo_image2label_paths(self.im_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
         try:
             cache, exists = (
@@ -337,7 +337,7 @@ class YoloDataset(BaseDataset):
             img_meta = self._get_coco_image_info(img_path, img_id, save_path)
             images.append(img_meta)
 
-            label_path = image2label_paths([img_path])[0]
+            label_path = yolo_image2label_paths([img_path])[0]
 
             annotation = self._get_coco_annotation(
                 Path(label_path), img_id, img_meta["height"], img_meta["width"]

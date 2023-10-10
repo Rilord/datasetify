@@ -9,14 +9,14 @@ def yolo2coco(dataset_path, save_dir):
     Convert yolo dataset to COCO
 
     Args:
-        dataset_path -- path to data.yaml config
+        dataset_path -- path to coco dataset root
         save_dir -- directory to save COCO dataset
     """
     cfg = get_yolo_cfg()
 
     data = check_det_dataset(dataset_path)
 
-    sets = filter(lambda x: True if x in ("test", "train", "test") else False, data.keys())
+    sets = filter(lambda x: True if x in ("train", "val", "test") else False, data.keys())
 
     img_paths = [Path(data["path"]).parent / Path(data[k]) for k in sets]
 

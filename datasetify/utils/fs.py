@@ -31,15 +31,20 @@ def extract_basename(filename):
     return os.path.splitext(filename)[0]
 
 
-def make_dirs(dir="new_dir/"):
+def make_yolo_dirs(dir="new_dir/", train_sets=("train", "val", "test")):
     '''Create folders'''
     dir = Path(dir)
     if dir.exists():
         shutil.rmtree(dir)  # delete dir
     for p in dir, dir / "labels", dir / "images":
         p.mkdir(parents=True, exist_ok=True)  # make dir
+    labels_paths = [dir / "labels" / ts for ts in train_sets]
+    images_paths = [dir / "images" / ts for ts in train_sets]
+    for p in labels_paths:
+        p.mkdir(parents=True, exist_ok=True)
+    for p in images_paths:
+        p.mkdir(parents=True, exist_ok=True)
     return dir
-
 
 def image_folder2file(folder="images/"):  # from utils import *; image_folder2file()
     '''write a txt file listing all imaged in folder'''

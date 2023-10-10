@@ -1,6 +1,7 @@
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
+import shutil
 
 import numpy as np
 
@@ -8,7 +9,16 @@ from PIL import Image
 from datasetify.dataset.augmentation import Compose, Format, LetterBox
 from datasetify.utils import IMG_FORMATS, LOGGER, NUM_THREADS, TQDM
 from datasetify.utils import json_load
-from .utils import exif_size, load_dataset_cache_file, save_dataset_cache_file
+from datasetify.utils.bboxes import coco2yolo
+from datasetify.utils.fs import make_yolo_dirs
+from datasetify.utils.yaml import yaml_save
+from .utils import (
+    exif_size,
+    load_dataset_cache_file,
+    save_dataset_cache_file,
+    yolo_autosplit,
+    yolo_image2label_paths,
+)
 from .base import BaseDataset
 from .augmentation import generic_transforms
 
@@ -16,6 +26,7 @@ from .augmentation import generic_transforms
 class COCODataset(BaseDataset):
     def __init__(self, *args, path, **kwargs):
         self.path = path
+        self.categories = { }
         super().__init__(*args, **kwargs)
 
     def cache_labels(self, path=Path("./labels.cache")):
@@ -27,7 +38,12 @@ class COCODataset(BaseDataset):
         """
         json_data = json_load(self.path)
 
-        images = dict([(x["id"], str(Path(self.img_path[0]) / Path(x["file_name"]))) for x in json_data["images"]])
+        images = dict(
+            [
+                (x["id"], str(Path(self.img_path[0]) / Path(x["file_name"])))
+                for x in json_data["images"]
+            ]
+        )
         lbs = dict(
             [
                 (x["id"], (x["bbox"], x["image_id"], x["category_id"]))
@@ -54,7 +70,9 @@ class COCODataset(BaseDataset):
         with ThreadPool(NUM_THREADS) as pool:
             results = pool.imap(
                 func=verify_image_label,
-                iterable=zip(lbs.values(), ims_to_lbs, repeat(self.prefix), repeat(categories)),
+                iterable=zip(
+                    lbs.values(), ims_to_lbs, repeat(self.prefix), repeat(categories)
+                ),
             )
             pbar = TQDM(results, desc=desc, total=total)
             for (
@@ -76,9 +94,9 @@ class COCODataset(BaseDataset):
                         dict(
                             im_file=im_file,
                             shape=shape,
-                            cls=lb[0:1],
+                            cls=lb[0],
                             bboxes=lb[1:],
-                            normalized=True,
+                            normalized=False,
                             bbox_format="coco",
                         )
                     )
@@ -92,6 +110,7 @@ class COCODataset(BaseDataset):
             LOGGER.warning(f"{self.prefix}WARNING No labels found in {path}.")
         # x['hash'] = get_hash(self.label_files + self.im_files)
         x["results"] = nf, nm, ne, nc, len(self.im_files)
+        x["categories"] = categories
         save_dataset_cache_file(self.prefix, path, x)
 
         return x
@@ -116,6 +135,7 @@ class COCODataset(BaseDataset):
 
         # Read cache
         labels = cache["labels"]
+        self.categories = dict(cache["categories"])
         if not labels:
             LOGGER.warning(
                 f"WARNING No images found in {cache_path}, training may not work correctly."
@@ -146,8 +166,52 @@ class COCODataset(BaseDataset):
         )
         return transforms
 
-    def to_yolo(self):
-        pass
+    def to_yolo(self, save_path=Path("./yolo-dataset"), autosplit=(0.9, 0.1, 0.0)):
+        """Convert dataset to YOLO format"""
+
+        train_sets=["train", "val", "test"][:len(autosplit)]
+
+        make_yolo_dirs(str(save_path), train_sets)
+
+        img_labels = {}
+
+        for label in TQDM(self.labels):
+            im_file = Path(label["im_file"]).parts[-1]
+            if label["im_file"] not in img_labels.keys():
+                img_labels[im_file] = []
+            img_labels[im_file].append((label["cls"], label["bboxes"]))
+
+        if autosplit and len(autosplit) > 0:
+            image_sets, label_sets = yolo_autosplit(self.img_path[0], autosplit)
+            for train_set in train_sets:
+                for img_path, label_path in zip(image_sets[train_set], label_sets[train_set]):
+                    label_path = save_path / Path("labels") / train_set / Path(label_path).parts[-1]
+                    shutil.copy(img_path, save_path / Path("images") /  train_set / img_path.parts[-1])
+                    with open(label_path, "a+", encoding="utf-8") as lbl:
+                        img_path = img_path.parts[-1]
+                        if img_path in img_labels.keys():
+                            for cls, bbox in img_labels[img_path]:
+                                coords = coco2yolo(bbox)
+                                lbl.write(
+                                    f"{cls} {coords[0]:.5f} {coords[1]:.5f} {coords[2]:.5f} {coords[3]:.5}\n"
+                                )
+        else:
+            for img_path, label in img_labels:
+                label_path = Path(yolo_image2label_paths([str(img_path)])[0])
+                shutil.copy(img_path, Path("images") / img_path)
+                label_path = yolo_image2label_paths([Path("images") / img_path])[0]
+                with open(label_path, "a+", encoding="utf-8") as lbl:
+                    img_path = img_path.parts[-1]
+                    if img_path in img_labels.keys():
+                        for cls, bbox in img_labels[img_path]:
+                            coords = coco2yolo(np.array(bbox))
+                            lbl.write(
+                                f"{cls} {coords[0]:.5f} {coords[1]:.5f} {coords[2]:.5f} {coords[3]:.5}\n"
+                            )
+
+        meta_data = { "data": str(save_path), "train": "images/train", "val": "images/val", "test": "images/test", "names": self.categories }
+
+        yaml_save(meta_data, str(save_path / "data.yaml"))
 
 
 def verify_image_label(args):
@@ -163,9 +227,8 @@ def verify_image_label(args):
         assert cat_id in categories.keys(), f"invalid category {cat_id}"
         assert (shape[0] > 9) & (shape[1] > 9), f"image size {shape} <10 pixels"
         assert im.format.lower() in IMG_FORMATS, f"invalid image format {im.format}"
-        bbox = np.array(bbox, dtype=np.float32)
-
-        lb = np.array([cat_id] + bbox, dtype=np.float32)
+        bbox = [cat_id] + bbox
+        lb = np.array(bbox, dtype=np.float32)
         assert (lb >= 0).all(), f"negative label values {lb[lb < 0]}"
         nf = 1
 

@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 from datasetify.utils.fs import is_dir_writeable
 
 
-def image2label_paths(img_paths):
+def yolo_image2label_paths(img_paths):
     """Define label paths as a function of image paths."""
     sa, sb = (
         f"{os.sep}images{os.sep}",
@@ -196,3 +196,46 @@ def save_dataset_cache_file(prefix, path, x):
         LOGGER.warning(
             f"{prefix}WARNING ⚠️ Cache directory {path.parent} is not writeable, cache not saved."
         )
+
+
+def yolo_autosplit(path=DATASETS_DIR / 'coco8/images', weights=(0.9, 0.1, 0.0), annotated_only=False):
+    """
+    Automatically split a dataset into train/val/test splits and save the resulting splits into autosplit_*.txt files.
+
+    Args:
+        path (Path, optional): Path to images directory. Defaults to DATASETS_DIR / 'coco8/images'.
+        weights (list | tuple, optional): Train, validation, and test split fractions. Defaults to (0.9, 0.1, 0.0).
+        annotated_only (bool, optional): If True, only images with an associated txt file are used. Defaults to False.
+
+    Example:
+        ```python
+        from ultralytics.data.utils import autosplit
+
+        autosplit()
+        ```
+    """
+
+    path = Path(path)  # images dir
+    files = sorted(x for x in path.rglob('*.*') if x.suffix[1:].lower() in IMG_FORMATS)  # image files only
+    n = len(files)  # number of files
+    random.seed(0)  # for reproducibility
+    indices = random.choices([0, 1, 2], weights=weights, k=n)  # assign each image to a split
+
+    txt = ['autosplit_train.txt', 'autosplit_val.txt', 'autosplit_test.txt']  # 3 txt files
+    sets = ['train', 'val', 'test']
+    for x in txt:
+        if (path.parent / x).exists():
+            (path.parent / x).unlink()  # remove existing
+
+    image_sets = { 'train': [], 'val': [], 'test': [] }
+    label_sets = { 'train': [], 'val': [], 'test': [] }
+
+    LOGGER.info(f'Autosplitting images from {path}' + ', using *.txt labeled images only' * annotated_only)
+    for i, img in TQDM(zip(indices, files), total=n):
+        if not annotated_only or Path(yolo_image2label_paths([str(img)])[0]).exists():  # check label
+            image_sets[sets[i]].append(img)
+            label_sets[sets[i]].append(yolo_image2label_paths([str(img)])[0])
+            with open(path.parent / txt[i], 'a') as f:
+                f.write(f'./{img.relative_to(path.parent).as_posix()}' + '\n')  # add image to txt file
+
+    return image_sets, label_sets
