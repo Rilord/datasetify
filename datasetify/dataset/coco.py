@@ -1,3 +1,4 @@
+from argparse import Namespace
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
@@ -26,7 +27,7 @@ from .augmentation import generic_transforms
 class COCODataset(BaseDataset):
     def __init__(self, *args, path, **kwargs):
         self.path = path
-        self.categories = { }
+        self.categories = {}
         super().__init__(*args, **kwargs)
 
     def cache_labels(self, path=Path("./labels.cache")):
@@ -38,21 +39,27 @@ class COCODataset(BaseDataset):
         """
         json_data = json_load(self.path)
 
+        data = Namespace(**json_data)
+
         images = dict(
             [
-                (x["id"], str(Path(self.img_path[0]) / Path(x["file_name"])))
-                for x in json_data["images"]
+                (x.id, str(Path(self.img_path[0]) / Path(x.file_name)))
+                # relative path to image dataset_path/img_path
+                for x in data.images
             ]
         )
         lbs = dict(
             [
-                (x["id"], (x["bbox"], x["image_id"], x["category_id"]))
-                for x in json_data["annotations"]
+                (
+                    x.id,
+                    {"bbox": x.bbox, "image_id": x.image_id, "cat_id": x.category_id},
+                )
+                for x in data.annotations
             ]
         )
-        categories = dict([(x["id"], x["name"]) for x in json_data["categories"]])
+        categories = dict([(x.id, x.name) for x in data.categories])
 
-        ims_to_lbs = [images[lb[2]] for lb in lbs.values()]
+        ims_to_lbs = [images[lb["image_id"]] for lb in lbs.values()]
 
         x = {"labels": []}
 
@@ -168,48 +175,48 @@ class COCODataset(BaseDataset):
 
     def to_yolo(self, save_path=Path("./yolo-dataset"), autosplit=(0.9, 0.1, 0.0)):
         """Convert dataset to YOLO format"""
+        img_labels = dict()
+        train_sets = [""]
 
-        train_sets=["train", "val", "test"][:len(autosplit)]
+        if autosplit:
+            train_sets = ["train", "val", "test"][: len(autosplit)]
+
+        image_sets, label_sets = yolo_autosplit(self.img_path[0], autosplit)
 
         make_yolo_dirs(str(save_path), train_sets)
 
-        img_labels = {}
-
         for label in TQDM(self.labels):
-            im_file = Path(label["im_file"]).parts[-1]
+            im_file = Path(label["im_file"])
             if label["im_file"] not in img_labels.keys():
                 img_labels[im_file] = []
             img_labels[im_file].append((label["cls"], label["bboxes"]))
 
-        if autosplit and len(autosplit) > 0:
-            image_sets, label_sets = yolo_autosplit(self.img_path[0], autosplit)
-            for train_set in train_sets:
-                for img_path, label_path in zip(image_sets[train_set], label_sets[train_set]):
-                    label_path = save_path / Path("labels") / train_set / Path(label_path).parts[-1]
-                    shutil.copy(img_path, save_path / Path("images") /  train_set / img_path.parts[-1])
-                    with open(label_path, "a+", encoding="utf-8") as lbl:
-                        img_path = img_path.parts[-1]
-                        if img_path in img_labels.keys():
-                            for cls, bbox in img_labels[img_path]:
-                                coords = coco2yolo(bbox)
-                                lbl.write(
-                                    f"{cls} {coords[0]:.5f} {coords[1]:.5f} {coords[2]:.5f} {coords[3]:.5}\n"
-                                )
-        else:
-            for img_path, label in img_labels:
-                label_path = Path(yolo_image2label_paths([str(img_path)])[0])
-                shutil.copy(img_path, Path("images") / img_path)
-                label_path = yolo_image2label_paths([Path("images") / img_path])[0]
-                with open(label_path, "a+", encoding="utf-8") as lbl:
-                    img_path = img_path.parts[-1]
-                    if img_path in img_labels.keys():
-                        for cls, bbox in img_labels[img_path]:
-                            coords = coco2yolo(np.array(bbox))
+        for train_set in train_sets:
+            for img, label in zip(image_sets[train_set], label_sets[train_set]):
+                shutil.copy(
+                    img["src"],
+                    Path(save_path) / img["dist"],
+                )
+                with open(
+                    Path(save_path) / label["dist"], "a+", encoding="utf-8"
+                ) as lbl:
+                    if img["src"] in img_labels.keys():
+                        for cls, bbox in img_labels[img["src"]]:
+                            coords = coco2yolo(bbox)
                             lbl.write(
                                 f"{cls} {coords[0]:.5f} {coords[1]:.5f} {coords[2]:.5f} {coords[3]:.5}\n"
                             )
 
-        meta_data = { "data": str(save_path), "train": "images/train", "val": "images/val", "test": "images/test", "names": self.categories }
+        meta_data = {
+            "data": str(save_path),
+            "names": self.categories,
+        }
+
+        for train_set in train_sets:
+            if train_set == "":
+                meta_data["train"] = "images/" + train_set
+            else:
+                meta_data[train_set] = "images/" + train_set
 
         yaml_save(meta_data, str(save_path / "data.yaml"))
 

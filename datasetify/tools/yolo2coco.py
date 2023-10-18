@@ -9,7 +9,7 @@ def yolo2coco(dataset_path, save_dir):
     Convert yolo dataset to COCO
 
     Args:
-        dataset_path -- path to coco dataset root
+        dataset_path -- path to yolo data.yaml
         save_dir -- directory to save COCO dataset
     """
     cfg = get_yolo_cfg()

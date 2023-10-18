@@ -11,6 +11,12 @@ from PIL import Image, ImageOps
 
 from datasetify.utils.fs import is_dir_writeable
 
+COMMON_LABELS_TXTS = ["classes.txt", "labels.txt"]
+
+
+def path_last_part(path):
+    return Path(path).parts[-1]
+
 
 def yolo_image2label_paths(img_paths):
     """Define label paths as a function of image paths."""
@@ -63,56 +69,56 @@ def verify_image(args):
     return (im_file, cls), nf, nc, msg
 
 
-def autosplit(
-    path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annotated_only=False
-):
-    """
-    Automatically split a dataset into train/val/test splits and save the resulting splits into autosplit_*.txt files.
-
-    Args:
-        path (Path, optional): Path to images directory. Defaults to DATASETS_DIR / 'coco8/images'.
-        weights (list | tuple, optional): Train, validation, and test split fractions. Defaults to (0.9, 0.1, 0.0).
-        annotated_only (bool, optional): If True, only images with an associated txt file are used. Defaults to False.
-
-    Example:
-        ```python
-        from ultralytics.data.utils import autosplit
-
-        autosplit()
-        ```
-    """
-
-    path = Path(path)  # images dir
-    files = sorted(
-        x for x in path.rglob("*.*") if x.suffix[1:].lower() in IMG_FORMATS
-    )  # image files only
-    n = len(files)  # number of files
-    random.seed(0)  # for reproducibility
-    indices = random.choices(
-        [0, 1, 2], weights=weights, k=n
-    )  # assign each image to a split
-
-    txt = [
-        "autosplit_train.txt",
-        "autosplit_val.txt",
-        "autosplit_test.txt",
-    ]  # 3 txt files
-    for x in txt:
-        if (path.parent / x).exists():
-            (path.parent / x).unlink()  # remove existing
-
-    LOGGER.info(
-        f"Autosplitting images from {path}"
-        + ", using *.txt labeled images only" * annotated_only
-    )
-    for i, img in TQDM(zip(indices, files), total=n):
-        if (
-            not annotated_only or Path(image2label_paths([str(img)])[0]).exists()
-        ):  # check label
-            with open(path.parent / txt[i], "a") as f:
-                f.write(
-                    f"./{img.relative_to(path.parent).as_posix()}" + "\n"
-                )  # add image to txt file
+# def autosplit(
+#     path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annotated_only=False
+# ):
+#     """
+#     Automatically split a dataset into train/val/test splits and save the resulting splits into autosplit_*.txt files.
+#
+#     Args:
+#         path (Path, optional): Path to images directory. Defaults to DATASETS_DIR / 'coco8/images'.
+#         weights (list | tuple, optional): Train, validation, and test split fractions. Defaults to (0.9, 0.1, 0.0).
+#         annotated_only (bool, optional): If True, only images with an associated txt file are used. Defaults to False.
+#
+#     Example:
+#         ```python
+#         from ultralytics.data.utils import autosplit
+#
+#         autosplit()
+#         ```
+#     """
+#
+#     path = Path(path)  # images dir
+#     files = sorted(
+#         x for x in path.rglob("*.*") if x.suffix[1:].lower() in IMG_FORMATS
+#     )  # image files only
+#     n = len(files)  # number of files
+#     random.seed(0)  # for reproducibility
+#     indices = random.choices(
+#         [0, 1, 2], weights=weights, k=n
+#     )  # assign each image to a split
+#
+#     txt = [
+#         "autosplit_train.txt",
+#         "autosplit_val.txt",
+#         "autosplit_test.txt",
+#     ]  # 3 txt files
+#     for x in txt:
+#         if (path.parent / x).exists():
+#             (path.parent / x).unlink()  # remove existing
+#
+#     LOGGER.info(
+#         f"Autosplitting images from {path}"
+#         + ", using *.txt labeled images only" * annotated_only
+#     )
+#     for i, img in TQDM(zip(indices, files), total=n):
+#         if (
+#             not annotated_only or Path(image2label_paths([str(img)])[0]).exists()
+#         ):  # check label
+#             with open(path.parent / txt[i], "a") as f:
+#                 f.write(
+#                     f"./{img.relative_to(path.parent).as_posix()}" + "\n"
+#                 )  # add image to txt file
 
 
 def polygon2mask(imgsz, polygons, color=1, downsample_ratio=1):
@@ -174,6 +180,7 @@ def polygons2masks_overlap(imgsz, segments, downsample_ratio=1):
         masks = np.clip(masks, a_min=0, a_max=i + 1)
     return masks, index
 
+
 def load_dataset_cache_file(path):
     """Load an Ultralytics *.cache dictionary from path."""
     import gc
@@ -198,44 +205,69 @@ def save_dataset_cache_file(prefix, path, x):
         )
 
 
-def yolo_autosplit(path=DATASETS_DIR / 'coco8/images', weights=(0.9, 0.1, 0.0), annotated_only=False):
+def yolo_autosplit(
+    path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annotated_only=False
+):
     """
-    Automatically split a dataset into train/val/test splits and save the resulting splits into autosplit_*.txt files.
+    Automatically split a dataset into train/val/test splits and save the resulting splits into autosplit_*.txt files and returns two lists containing image paths and label paths
+    ['train': [{'src': img_src_path, 'dist': img_dist_path}, ...]], ['train': [{'src': lbl_src_path, 'dist': lbl_dist_path}, ...]].
 
     Args:
         path (Path, optional): Path to images directory. Defaults to DATASETS_DIR / 'coco8/images'.
         weights (list | tuple, optional): Train, validation, and test split fractions. Defaults to (0.9, 0.1, 0.0).
         annotated_only (bool, optional): If True, only images with an associated txt file are used. Defaults to False.
 
-    Example:
-        ```python
-        from ultralytics.data.utils import autosplit
-
-        autosplit()
-        ```
     """
 
     path = Path(path)  # images dir
-    files = sorted(x for x in path.rglob('*.*') if x.suffix[1:].lower() in IMG_FORMATS)  # image files only
+    files = sorted(
+        x for x in path.rglob("*.*") if x.suffix[1:].lower() in IMG_FORMATS
+    )  # image files only
     n = len(files)  # number of files
     random.seed(0)  # for reproducibility
-    indices = random.choices([0, 1, 2], weights=weights, k=n)  # assign each image to a split
+    indices = random.choices(
+        [0, 1, 2], weights=weights, k=n
+    )  # assign each image to a split
 
-    txt = ['autosplit_train.txt', 'autosplit_val.txt', 'autosplit_test.txt']  # 3 txt files
-    sets = ['train', 'val', 'test']
+    txt = [
+        "autosplit_train.txt",
+        "autosplit_val.txt",
+        "autosplit_test.txt",
+    ]  # 3 txt files
+    sets = ["train", "val", "test"]
     for x in txt:
         if (path.parent / x).exists():
             (path.parent / x).unlink()  # remove existing
 
-    image_sets = { 'train': [], 'val': [], 'test': [] }
-    label_sets = { 'train': [], 'val': [], 'test': [] }
+    image_sets = {"train": [], "val": [], "test": []}
+    label_sets = {"train": [], "val": [], "test": []}
 
-    LOGGER.info(f'Autosplitting images from {path}' + ', using *.txt labeled images only' * annotated_only)
+    LOGGER.info(
+        f"Autosplitting images from {path}"
+        + ", using *.txt labeled images only" * annotated_only
+    )
     for i, img in TQDM(zip(indices, files), total=n):
-        if not annotated_only or Path(yolo_image2label_paths([str(img)])[0]).exists():  # check label
-            image_sets[sets[i]].append(img)
-            label_sets[sets[i]].append(yolo_image2label_paths([str(img)])[0])
-            with open(path.parent / txt[i], 'a') as f:
-                f.write(f'./{img.relative_to(path.parent).as_posix()}' + '\n')  # add image to txt file
+        if (
+            not annotated_only or Path(yolo_image2label_paths([str(img)])[0]).exists()
+        ):  # check label
+            dist_img_path = Path("images") / sets[i] / path_last_part(img)
+            image_sets[sets[i]].append({"src": img, "dist": dist_img_path})
+            label_sets[sets[i]].append(
+                {
+                    "src": yolo_image2label_paths([str(img)])[0],
+                    "dist": Path("labels")
+                    / sets[i]
+                    / (os.path.splitext(path_last_part(dist_img_path))[0] + ".txt"),
+                }
+            )
+            with open(path.parent / txt[i], "a") as f:
+                f.write(f"./{dist_img_path}" + "\n")  # add image to txt file
 
     return image_sets, label_sets
+
+
+def try_find_labels_txt(path):
+    for txt in COMMON_LABELS_TXTS:
+        txt_path = Path(path) / txt
+        if txt_path.is_file():
+            return txt_path
