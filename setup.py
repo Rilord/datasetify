@@ -82,6 +82,6 @@ setup(
         "Operating System :: MacOS",
         "Operating System :: Microsoft :: Windows",
     ],
-    keywords="machine-learning, deep-learning, vision, ML, DL, AI, YOLO, COCO, Labelme",
-    entry_points={"console_scripts": ["yolo = datasetify.cfg:entrypoint"]},
+    keywords="machine-learning, deep-learning, vision, ML, DL, AI, YOLO, COCO, Labelme, KITTI",
+    entry_points={"console_scripts": ["datasetify = datasetify.cfg:entrypoint"]},
 )
