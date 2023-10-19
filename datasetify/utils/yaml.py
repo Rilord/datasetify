@@ -10,7 +10,7 @@ def yaml_save(data, file="data.yaml"):
     ), f"Attempting to save to file with non-YAML extension {file} with yaml_save()"
     assert data is not None, f"Saving empty data"
     with open(file, "w+") as f:
-        yaml.dump(data, f)
+        yaml.dump(data, f, allow_unicode=True)
 
 
 def yaml_load(file="data.yaml", append_filename=False):

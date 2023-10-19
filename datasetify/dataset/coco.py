@@ -208,7 +208,7 @@ class COCODataset(BaseDataset):
                             )
 
         meta_data = {
-            "data": str(save_path),
+            "path": str(save_path),
             "names": self.categories,
         }
 

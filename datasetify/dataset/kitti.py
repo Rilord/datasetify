@@ -197,10 +197,8 @@ class KITTIDataset(BaseDataset):
                     Path(save_path) / label["dist"],
                 )
 
-        # save yaml
-
         meta_data = {
-            "data": str(save_path),
+            "path": str(save_path),
             "names": self.data["names"],
         }
 
