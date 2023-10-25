@@ -62,7 +62,7 @@ def check_det_dataset(dataset, labels_txt_path):
     return data
 
 
-class KITTIDataset(BaseDataset):
+class YOLOv4Dataset(BaseDataset):
     def __init__(self, *args, labels_txt_path, data, **kwargs):
         self.data = data
         self.labels_txt_path = labels_txt_path
@@ -310,8 +310,8 @@ def verify_image_label(args):
         return [None, None, None, None, None, nm, nf, ne, nc, msg]
 
 
-def build_kitti_dataset(cfg, img_path, labels_txt_path, data, mode="train"):
-    return KITTIDataset(
+def build_yolov4_dataset(cfg, img_path, labels_txt_path, data, mode="train"):
+    return YOLOv4Dataset(
         img_path=img_path,
         cache=cfg.cache or None,
         classes=cfg.classes,

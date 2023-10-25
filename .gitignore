@@ -173,3 +173,5 @@ long1.jpg
 *.pdmodel
 
 .DS_Store
+
+autosplit_*.txt

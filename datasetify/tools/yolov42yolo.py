@@ -1,13 +1,12 @@
 from pathlib import Path
-from datasetify.dataset.kitti import build_kitti_dataset
+from datasetify.dataset.yolov4 import build_yolov4_dataset
 from datasetify.dataset.utils import try_find_labels_txt
 from datasetify.dataset.kitti import check_det_dataset
 
 from datasetify.yolo.cfg import get_yolo_cfg
-from datasetify.dataset.coco import build_coco_dataset
 
 
-def kitti2yolo(dataset_path, save_dir):
+def yolov42yolo(dataset_path, save_dir, autosplit=(0.8, 0.1, 0.1)):
     """
     Convert KITTI dataset to YOLO
 
@@ -32,6 +31,6 @@ def kitti2yolo(dataset_path, save_dir):
 
     img_paths = [data["path"]]
 
-    dataset = build_kitti_dataset(cfg, img_paths, labels_txt_path, data)
+    dataset = build_yolov4_dataset(cfg, img_paths, labels_txt_path, data)
 
     dataset.to_yolo(save_path=Path(save_dir), autosplit=(0.8, 0.1, 0.1))
