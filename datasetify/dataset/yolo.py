@@ -333,7 +333,12 @@ class YoloDataset(BaseDataset):
             "date_created": date_created,
         }
 
-        for img_id, img_path in enumerate(TQDM(self.im_files)):
+        for img_id, img_path in enumerate(
+            TQDM(
+                self.im_files,
+                desc=f"Converting YOLO files to COCO format and saving to {save_path}...",
+            )
+        ):
             img_meta = self._get_coco_image_info(img_path, img_id, save_path)
             images.append(img_meta)
 

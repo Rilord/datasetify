@@ -179,15 +179,16 @@ class YOLOv4Dataset(BaseDataset):
         if autosplit:
             train_sets = ["train", "val", "test"][: len(autosplit)]
 
-
-        image_sets, label_sets = yolo_autosplit(self.img_path[0], autosplit) # destination image and label paths
+        image_sets, label_sets = yolo_autosplit(
+            self.img_path[0], autosplit
+        )  # destination image and label paths
 
         make_yolo_dirs(str(save_path), train_sets)
 
-        for train_set in train_sets:
-            for img, label in zip(
-                image_sets[train_set], label_sets[train_set]
-            ):
+        for train_set in TQDM(
+            train_sets, desc=f"Copying files from {self.img_path[0]} to {save_path}..."
+        ):
+            for img, label in zip(image_sets[train_set], label_sets[train_set]):
                 shutil.copy(
                     img["src"],
                     Path(save_path) / img["dist"],
@@ -208,9 +209,7 @@ class YOLOv4Dataset(BaseDataset):
             else:
                 meta_data[train_set] = "images/" + train_set
 
-
         yaml_save(meta_data, str(save_path / "data.yaml"))
-
 
     def build_transforms(self, hyp=None):
         """Builds and appends transforms to the list."""
@@ -234,7 +233,6 @@ class YOLOv4Dataset(BaseDataset):
             )
         )
         return transforms
-
 
 
 def verify_image_label(args):

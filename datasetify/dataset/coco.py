@@ -185,13 +185,13 @@ class COCODataset(BaseDataset):
 
         make_yolo_dirs(str(save_path), train_sets)
 
-        for label in TQDM(self.labels):
+        for label in TQDM(self.labels, desc="Extracting labels from COCO's annotations..."):
             im_file = Path(label["im_file"])
             if label["im_file"] not in img_labels.keys():
                 img_labels[im_file] = []
             img_labels[im_file].append((label["cls"], label["bboxes"]))
 
-        for train_set in train_sets:
+        for train_set in TQDM(train_sets, desc=f"Saving labels to {save_path}..."):
             for img, label in zip(image_sets[train_set], label_sets[train_set]):
                 shutil.copy(
                     img["src"],
