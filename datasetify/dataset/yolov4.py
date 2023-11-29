@@ -137,8 +137,10 @@ class YOLOv4Dataset(BaseDataset):
         return x
 
     def get_labels(self):
+        print(self.im_files)
         """Returns dictionary of labels for YOLO training."""
         self.label_files = yolo_image2label_paths(self.im_files)
+        print(self.label_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
         try:
             cache, exists = (
@@ -306,7 +308,7 @@ def verify_image_label(args):
     except Exception as e:
         nc = 1
         msg = f"{prefix}WARNING {im_file}: ignoring corrupt image/label: {e}"
-        return [None, None, None, None, None, nm, nf, ne, nc, msg]
+        return [None, None, None, nm, nf, ne, nc, msg]
 
 
 def build_yolov4_dataset(cfg, img_path, labels_txt_path, data, mode="train"):
