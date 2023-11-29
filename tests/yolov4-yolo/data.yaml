@@ -1,0 +1,6 @@
+names:
+  0: grass
+path: yolov4-yolo
+test: images/test
+train: images/train
+val: images/val

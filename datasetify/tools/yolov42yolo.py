@@ -1,7 +1,7 @@
 from pathlib import Path
 from datasetify.dataset.yolov4 import build_yolov4_dataset
 from datasetify.dataset.utils import try_find_labels_txt
-from datasetify.dataset.kitti import check_det_dataset
+from datasetify.dataset.yolov4 import check_det_dataset
 
 from datasetify.yolo.cfg import get_yolo_cfg
 

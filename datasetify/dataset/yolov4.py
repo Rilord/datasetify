@@ -189,6 +189,7 @@ class YOLOv4Dataset(BaseDataset):
             train_sets, desc=f"Copying files from {self.img_path[0]} to {save_path}..."
         ):
             for img, label in zip(image_sets[train_set], label_sets[train_set]):
+                print(img, label)
                 shutil.copy(
                     img["src"],
                     Path(save_path) / img["dist"],
